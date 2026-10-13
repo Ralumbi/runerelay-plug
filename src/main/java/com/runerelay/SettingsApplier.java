@@ -38,6 +38,20 @@ class SettingsApplier
 		Object value;
 	}
 
+	/**
+	 * A raw write to another plugin's stored data, e.g. its list of enabled packs.
+	 */
+	@Value
+	static class RawChange
+	{
+		String group;
+		String key;
+		/**
+		 * New raw value, or null to unset.
+		 */
+		String value;
+	}
+
 	@AllArgsConstructor
 	private static class BackupEntry
 	{
@@ -65,6 +79,10 @@ class SettingsApplier
 		String singleId;
 		long time;
 		List<BackupEntry> entries;
+		/**
+		 * Plugin that only reads this data when it starts, so it is restarted around writes; may be null.
+		 */
+		String restartPlugin;
 	}
 
 	private final ConfigManager configManager;
@@ -76,7 +94,7 @@ class SettingsApplier
 	 * True while RuneRelay itself is writing, so its own config events can be told apart.
 	 */
 	@Getter
-	private boolean applying;
+	private volatile boolean applying;
 
 	@Inject
 	SettingsApplier(ConfigManager configManager, PluginManager pluginManager, SettingsModel model)
@@ -145,11 +163,84 @@ class SettingsApplier
 			last.label = label;
 			return;
 		}
-		history.push(new Batch(label, singleId, now, backup));
+		push(new Batch(label, singleId, now, backup, null));
+	}
+
+	/**
+	 * Write another plugin's stored data. That plugin only reads it on start-up, so it is stopped
+	 * while writing and started again afterwards. Undo does the same.
+	 */
+	void applyRaw(List<RawChange> changes, String label, Plugin restart)
+	{
+		List<BackupEntry> backup = new ArrayList<>();
+		withStopped(restart, () ->
+		{
+			for (RawChange change : changes)
+			{
+				backup.add(new BackupEntry(change.getGroup(), change.getKey(),
+					configManager.getConfiguration(change.getGroup(), change.getKey())));
+				write(change.getGroup(), change.getKey(), change.getValue());
+			}
+		});
+		push(new Batch(label, null, System.currentTimeMillis(), backup, restart == null ? null : restart.getName()));
+	}
+
+	private void push(Batch batch)
+	{
+		history.push(batch);
 		while (history.size() > MAX_UNDO)
 		{
 			history.removeLast();
 		}
+	}
+
+	private void write(String group, String key, String value)
+	{
+		if (value == null)
+		{
+			configManager.unsetConfiguration(group, key);
+		}
+		else
+		{
+			configManager.setConfiguration(group, key, value);
+		}
+	}
+
+	/**
+	 * Run {@code action} with the plugin stopped (if it was running), then start it again.
+	 */
+	private void withStopped(Plugin plugin, Runnable action)
+	{
+		boolean wasActive = plugin != null && pluginManager.isPluginActive(plugin);
+		applying = true;
+		try
+		{
+			if (wasActive)
+			{
+				pluginManager.stopPlugin(plugin);
+			}
+			action.run();
+			if (wasActive)
+			{
+				pluginManager.startPlugin(plugin);
+			}
+		}
+		catch (PluginInstantiationException ex)
+		{
+			log.warn("Unable to restart plugin {}", plugin.getName(), ex);
+		}
+		finally
+		{
+			applying = false;
+		}
+	}
+
+	/**
+	 * Forget undo history, e.g. after switching RuneLite profile, where it would undo the wrong settings.
+	 */
+	void clearHistory()
+	{
+		history.clear();
 	}
 
 	boolean canUndo()
@@ -172,8 +263,8 @@ class SettingsApplier
 		}
 		List<BackupEntry> entries = new ArrayList<>(batch.entries);
 		Collections.reverse(entries);
-		applying = true;
-		try
+		Plugin restart = batch.restartPlugin == null ? null : model.findPlugin(batch.restartPlugin);
+		withStopped(restart, () ->
 		{
 			for (BackupEntry entry : entries)
 			{
@@ -185,20 +276,12 @@ class SettingsApplier
 						setPluginEnabled(plugin, Boolean.parseBoolean(entry.previous));
 					}
 				}
-				else if (entry.previous == null)
-				{
-					configManager.unsetConfiguration(entry.group, entry.key);
-				}
 				else
 				{
-					configManager.setConfiguration(entry.group, entry.key, entry.previous);
+					write(entry.group, entry.key, entry.previous);
 				}
 			}
-		}
-		finally
-		{
-			applying = false;
-		}
+		});
 	}
 
 	void setPluginEnabled(Plugin plugin, boolean enabled)

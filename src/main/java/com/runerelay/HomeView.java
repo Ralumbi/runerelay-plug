@@ -1,7 +1,6 @@
 package com.runerelay;
 
 import java.awt.BorderLayout;
-import java.awt.Color;
 import java.awt.Cursor;
 import java.awt.Dimension;
 import java.awt.FlowLayout;
@@ -12,7 +11,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import javax.swing.JButton;
-import javax.swing.JComboBox;
 import javax.swing.JComponent;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
@@ -35,19 +33,14 @@ class HomeView
 	@RequiredArgsConstructor
 	private enum Filter
 	{
-		ALL("All plugins"),
-		SUGGESTED("With suggestions"),
-		ON("Switched on"),
-		OFF("Switched off"),
-		NOT_INSTALLED("Not installed");
+		ALL("All", "Every plugin"),
+		SUGGESTED("Suggested", "Plugins with suggestions waiting"),
+		ON("On", "Plugins that are switched on"),
+		OFF("Off", "Plugins that are switched off"),
+		NOT_INSTALLED("Install", "Plugin Hub plugins you can install");
 
 		private final String label;
-
-		@Override
-		public String toString()
-		{
-			return label;
-		}
+		private final String tooltip;
 	}
 
 	private static class Entry
@@ -70,10 +63,16 @@ class HomeView
 	private final SettingsModel model;
 	private final JPanel bar = new JPanel(new DynamicGridLayout(0, 1, 0, 4));
 	private final IconTextField search = new IconTextField();
-	private final JComboBox<Filter> filter = new JComboBox<>(Filter.values());
+	private final JPanel filterTabs = new JPanel(new BorderLayout());
+	private Filter filter = Filter.ALL;
 	private final List<Entry> entries = new ArrayList<>();
 	private final List<SectionHeader> headers = new ArrayList<>();
-	private JLabel empty;
+	/**
+	 * Holds only the rows currently shown. RuneLite's grid layout keeps space for hidden
+	 * components, so filtering removes and re-adds rows instead of hiding them.
+	 */
+	private final JPanel list = new JPanel(new DynamicGridLayout(0, 1, 0, 5));
+	private final JLabel empty = Ui.note("No plugins match. Try another search or filter.");
 
 	HomeView(RuneRelayPanel panel)
 	{
@@ -108,10 +107,10 @@ class HomeView
 		});
 		bar.add(search);
 
-		filter.setFocusable(false);
-		filter.setToolTipText("Show only some plugins");
-		filter.addActionListener(e -> applyFilter());
-		bar.add(filter);
+		filterTabs.setOpaque(false);
+		renderFilterTabs();
+		bar.add(filterTabs);
+		list.setOpaque(false);
 	}
 
 	JComponent bar()
@@ -154,46 +153,70 @@ class HomeView
 			header.id = section.getId();
 			header.header = sectionHeader(section, rows.size());
 			headers.add(header);
-			content.add(header.header);
-			for (Entry entry : rows)
-			{
-				entries.add(entry);
-				content.add(entry.row);
-			}
+			entries.addAll(rows);
 		}
 
-		empty = Ui.note("No plugins match. Try another search or filter.");
-		content.add(empty);
+		content.add(list);
 		applyFilter();
 	}
 
 	private void applyFilter()
 	{
 		String query = search.getText().trim().toLowerCase(Locale.ROOT);
-		Filter selected = (Filter) filter.getSelectedItem();
+		Filter selected = filter;
+		list.removeAll();
 		int shown = 0;
 		for (SectionHeader header : headers)
 		{
 			boolean collapsed = query.isEmpty() && model.getCollapsedSections().contains(header.id);
-			boolean any = false;
+			List<JPanel> matching = new ArrayList<>();
 			for (Entry entry : entries)
 			{
-				if (!entry.sectionId.equals(header.id))
+				if (entry.sectionId.equals(header.id)
+					&& (query.isEmpty() || entry.haystack.contains(query)) && matches(entry, selected))
 				{
-					continue;
+					matching.add(entry.row);
 				}
-				boolean match = (query.isEmpty() || entry.haystack.contains(query)) && matches(entry, selected);
-				entry.row.setVisible(match && !collapsed);
-				any |= match;
-				shown += match ? 1 : 0;
 			}
-			header.header.setVisible(any);
+			if (matching.isEmpty())
+			{
+				continue;
+			}
+			shown += matching.size();
+			list.add(header.header);
+			if (!collapsed)
+			{
+				matching.forEach(list::add);
+			}
 		}
-		if (empty != null)
+		if (shown == 0)
 		{
-			empty.setVisible(shown == 0);
+			list.add(empty);
 		}
+		list.revalidate();
+		list.repaint();
 		panel.relayout();
+	}
+
+	private void renderFilterTabs()
+	{
+		Filter[] filters = Filter.values();
+		String[] labels = new String[filters.length];
+		String[] tooltips = new String[filters.length];
+		for (int i = 0; i < filters.length; i++)
+		{
+			labels[i] = filters[i].getLabel();
+			tooltips[i] = filters[i].getTooltip();
+		}
+		filterTabs.removeAll();
+		filterTabs.add(Ui.tabs(labels, tooltips, filter.ordinal(), index ->
+		{
+			filter = filters[index];
+			renderFilterTabs();
+			applyFilter();
+		}), BorderLayout.CENTER);
+		filterTabs.revalidate();
+		filterTabs.repaint();
 	}
 
 	private static boolean matches(Entry entry, Filter filter)
@@ -271,7 +294,7 @@ class HomeView
 		JPanel text = new JPanel(new DynamicGridLayout(0, 1, 0, 1));
 		text.setOpaque(false);
 		JLabel title = new JLabel(Ui.html(name, nameWidth));
-		title.setForeground(entry.installed ? Color.WHITE : ColorScheme.LIGHT_GRAY_COLOR);
+		title.setForeground(entry.installed ? ColorScheme.TEXT_COLOR : ColorScheme.LIGHT_GRAY_COLOR);
 		text.add(title);
 
 		StringBuilder meta = new StringBuilder(hub == null ? "Built-in" : "Plugin Hub");

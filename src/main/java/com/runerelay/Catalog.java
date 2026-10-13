@@ -31,24 +31,20 @@ final class Catalog
 	private static final String KEY_REMAPPING = "Key Remapping";
 	private static final String CAMERA = "Camera";
 	private static final String BANK = "Bank";
-	private static final String LINE_OF_SIGHT = "Line of Sight";
-	private static final String PATH_MARKER = "Path Marker";
 	private static final String RADIUS_MARKERS = "Radius Markers";
 	private static final String TILE_PACKS = "Tile Packs";
-	private static final String QUICK_TILES = "Quick Tiles";
 	private static final String IMPROVED_TILES = "Improved Tile Indicators";
-	private static final String GROUND_MARKER_PROFILES = "Ground Marker Profiles";
 	private static final String QUEST_HELPER = "Quest Helper";
 	private static final String INVENTORY_SETUPS = "Inventory Setups";
-	private static final String DUDE = "Dude, Where's My Stuff?";
 	private static final String SHORTEST_PATH = "Shortest Path";
 	private static final String ITEM_CHARGES = "Item Charges Improved";
-	private static final String GE_FILTERS = "GE Filters";
 	private static final String KEY_REMAPPING_PLUS = "Key Remapping Plus";
 	// Registers itself with a lowercase "k"
 	private static final String SMART_KEY_REMAPPING = "Smart key remapping";
-	private static final String PLUGIN_HOTKEYS = "Plugin Hotkeys";
-	private static final String KEYBINDS_OVERLAY = "Keybinds Overlay";
+	private static final String LOGOUT_TIMER = "Logout Timer";
+
+	private static final String SPAWN_RANGES_WHY = "These ranges are drawn around where a marker was placed, not around "
+		+ "the NPC, so they leave stray lines on the map as you walk. Attack ranges, which follow the NPC, stay on.";
 
 	/**
 	 * Logical screen width above which the game UI gets uncomfortably small.
@@ -76,32 +72,25 @@ final class Catalog
 		.put("Interact Highlight", "Outlines whatever you hover over and whatever you are currently interacting with.")
 		.put("Anti Drag", "Makes it harder to drag inventory items by accident. By default it only kicks in while you hold Shift.")
 		.put("Virtual Levels", "Keeps counting levels past 99 based on your experience, up to 126.")
-		.put(LINE_OF_SIGHT, "Shows which tiles you can see from where you stand. RuneRelay switches it to outline only, because by default it outlines every visible tile and floods the screen.")
-		.put(PATH_MARKER, "Draws the route your character is about to walk on the ground and on the minimap.")
-		.put(RADIUS_MARKERS, "Shows an NPC's attack, aggression or wander range. You add markers yourself from its side panel and can share them with copy and paste. Ranges are never added automatically at bosses or raids: the game's third-party client rules only allow marking those by hand.")
-		.put(TILE_PACKS, "Ready-made packs of ground marker tiles made by other players. Open its side panel and switch on the packs you want.")
-		.put(QUICK_TILES, "Mark tiles faster: with a hotkey, or Shift + right-click and choose Mark. RuneRelay sets it to Shift only so your normal right-click menu stays clean.")
-		.put(IMPROVED_TILES, "Extra styles for tile indicators, and draws them under your character and NPCs instead of on top.")
-		.put(GROUND_MARKER_PROFILES, "Keep several sets of ground markers and switch between them from the side panel.")
+		.put(LOGOUT_TIMER, "The game logs you out after 5 minutes without input. This plugin stretches that, up to 30 minutes.")
+		.put(RADIUS_MARKERS, "Shows an NPC's attack, aggression or wander range, also inside raids and other instances. Add markers from its side panel, or add ready-made boss and raid markers with the button below. Markers are measured in game; the plugin doesn't work them out itself.")
+		.put(TILE_PACKS, "Ready-made tile setups made by other players, including raids, bosses, the Inferno and the Colosseum. Use the button below to pick the fights you do, or switch packs on in its own side panel.")
 		.put(QUEST_HELPER, "Step-by-step help for every quest. Open its side panel, pick a quest, and it highlights what to do next.")
 		.put(INVENTORY_SETUPS, "Save your gear and inventory for each activity. In the bank it highlights exactly what to take out.")
-		.put(DUDE, "Remembers where all your items are: banks, storage, death piles and more, so you can always find them.")
 		.put(SHORTEST_PATH, "Right-click the world map, or Shift + right-click a tile, to set a destination. It draws the fastest route, including teleports you can use.")
 		.put(ITEM_CHARGES, "Shows the remaining charges on many items that the game doesn't display.")
-		.put(GE_FILTERS, "Adds handy search filters to the Grand Exchange.")
-		.put(KEY_REMAPPING_PLUS, "A copy of Key Remapping with extra options.")
-		.put(SMART_KEY_REMAPPING, "Key remapping that tries to get out of your way while you type, so you need Enter less often.")
-		.put(PLUGIN_HOTKEYS, "Give any plugin a hotkey to switch it on and off without opening the settings.")
-		.put(KEYBINDS_OVERLAY, "Shows your keybinds on screen while you are learning them.")
 		.build();
 
 	/**
 	 * Plugins that clash when on together: two renderers, two key remappers fighting over the same keys,
 	 * or two tile indicator plugins drawing the same tiles twice. Only one per group should be on.
+	 * RuneRelay only offers the first of each group, but players may have the others installed.
 	 */
+	private static final List<String> KEY_REMAPPERS = Arrays.asList(KEY_REMAPPING, KEY_REMAPPING_PLUS, SMART_KEY_REMAPPING);
+
 	private static final List<List<String>> EXCLUSIVE_GROUPS = Arrays.asList(
 		Arrays.asList(GPU, HD),
-		Arrays.asList(KEY_REMAPPING, KEY_REMAPPING_PLUS, SMART_KEY_REMAPPING),
+		KEY_REMAPPERS,
 		Arrays.asList(TILES, IMPROVED_TILES)
 	);
 
@@ -190,6 +179,14 @@ final class Catalog
 			}
 		}
 		return new ArrayList<>();
+	}
+
+	/**
+	 * Whether the plugin remaps keys (core Key Remapping or one of its Plugin Hub alternatives).
+	 */
+	static boolean isKeyRemapper(String pluginName)
+	{
+		return KEY_REMAPPERS.contains(pluginName);
 	}
 
 	static List<List<String>> exclusiveGroups()
@@ -287,38 +284,22 @@ final class Catalog
 				free(NPC_INDICATORS, "drawNames")
 			)),
 			// Hub plugins below only appear once installed; their defaults can be noisy
-			new Section("markeraddons", "Marker add-ons", "Plugin Hub tile and marker plugins, with calmer defaults.", Arrays.asList(
-				free(LINE_OF_SIGHT, null),
-				fixed(LINE_OF_SIGHT, "outlineOnly", true, "By default every visible tile gets outlined, which floods the screen."),
-				free(LINE_OF_SIGHT, "overlayRange"),
-				free(LINE_OF_SIGHT, "showFill"),
-				free(LINE_OF_SIGHT, "borderColor"),
-				free(PATH_MARKER, null),
-				free(PATH_MARKER, "activePathDrawLocations"),
-				free(PATH_MARKER, "activePathDrawMode"),
-				free(PATH_MARKER, "activePathDisplaySetting"),
-				free(PATH_MARKER, "hoverPathDrawLocations"),
-				free(PATH_MARKER, "hoverPathDisplaySetting"),
-				free(RADIUS_MARKERS, null),
-				free(RADIUS_MARKERS, "includeWanderRange"),
-				free(RADIUS_MARKERS, "includeMaxRange"),
-				free(RADIUS_MARKERS, "includeAggressionRange"),
-				free(RADIUS_MARKERS, "includeAttackRange"),
-				free(RADIUS_MARKERS, "borderWidth"),
-				free(RADIUS_MARKERS, "showMinimap"),
-				free(RADIUS_MARKERS, "showWorldMap"),
+			// Plugin Hub plugins below only appear once installed
+			new Section("markeraddons", "Marker add-ons", "Ready-made tile and radius markers from the Plugin Hub.", Arrays.asList(
 				free(TILE_PACKS, null),
 				free(TILE_PACKS, "showLabels"),
 				free(TILE_PACKS, "fillOpacity"),
 				free(TILE_PACKS, "drawTilesOnMinimmap"),
-				free(QUICK_TILES, null),
-				free(QUICK_TILES, "style"),
-				free(QUICK_TILES, "fillOpacity"),
-				fixed(QUICK_TILES, "rightClick", "SHIFT",
-					"Keeps \"Mark\" out of your normal right-click menu; hold Shift to see it, like core Ground Markers."),
-				fixed(QUICK_TILES, "hideUnderPlayer", true, "A marked tile under your feet hides your character."),
-				free(IMPROVED_TILES, null),
-				free(GROUND_MARKER_PROFILES, null)
+				free(RADIUS_MARKERS, null),
+				// Wander, max and aggression ranges are drawn around a marker's spawn tile, not the NPC,
+				// which leaves stray lines on the map; attack ranges follow the NPC and stay on
+				fixed(RADIUS_MARKERS, "includeWanderRange", false, SPAWN_RANGES_WHY),
+				fixed(RADIUS_MARKERS, "includeMaxRange", false, SPAWN_RANGES_WHY),
+				fixed(RADIUS_MARKERS, "includeAggressionRange", false, SPAWN_RANGES_WHY),
+				free(RADIUS_MARKERS, "includeAttackRange"),
+				free(RADIUS_MARKERS, "borderWidth"),
+				free(RADIUS_MARKERS, "showMinimap"),
+				free(RADIUS_MARKERS, "showWorldMap")
 			)),
 			new Section("keybinds", "Keybinds & camera", "W A S D camera, F-keys on number keys, and right-click camera control.", Arrays.asList(
 				on(KEY_REMAPPING, "Camera on W A S D is far more comfortable than the arrow keys. Press Enter to chat."),
@@ -356,11 +337,7 @@ final class Catalog
 				free(CAMERA, "zoomIncrement"),
 				free(CAMERA, "invertYaw"),
 				free(CAMERA, "invertPitch"),
-				free(CAMERA, "disableCameraShake"),
-				free(KEY_REMAPPING_PLUS, null),
-				free(SMART_KEY_REMAPPING, null),
-				free(PLUGIN_HOTKEYS, null),
-				free(KEYBINDS_OVERLAY, null)
+				free(CAMERA, "disableCameraShake")
 			)),
 			new Section("bank", "Bank", "Type your bank PIN with the keyboard and tune the bank screen.", Arrays.asList(
 				on(BANK, "Needed for keyboard bank PIN and bank value."),
@@ -376,10 +353,8 @@ final class Catalog
 			new Section("essentials", "Plugin Hub essentials", "Switch installed essentials on or off and tune them.", Arrays.asList(
 				free(QUEST_HELPER, null),
 				free(INVENTORY_SETUPS, null),
-				free(DUDE, null),
 				free(SHORTEST_PATH, null),
-				free(ITEM_CHARGES, null),
-				free(GE_FILTERS, null)
+				free(ITEM_CHARGES, null)
 			))
 		);
 	}
@@ -397,38 +372,26 @@ final class Catalog
 		{
 			out.add(on(name, "Most players keep this on."));
 		}
+		out.add(on(LOGOUT_TIMER, "Stops the game logging you out after only 5 minutes of not touching it."));
+		out.add(fixed(LOGOUT_TIMER, "idleTimeout", 30, "The longest the game allows, so a short break doesn't log you out."));
 		return out;
 	}
 
 	static List<HubCategory> hubCategories()
 	{
 		BiPredicate<PerformanceTier, SystemSpecs> always = (t, s) -> true;
-		BiPredicate<PerformanceTier, SystemSpecs> never = (t, s) -> false;
 		BiPredicate<PerformanceTier, SystemSpecs> strongPc = (t, s) -> t == PerformanceTier.HIGH || t == PerformanceTier.ULTRA;
 
 		return Arrays.asList(
 			new HubCategory("Essentials", Arrays.asList(
 				new HubPlugin("quest-helper", QUEST_HELPER, "Step-by-step guidance for every quest", always),
 				new HubPlugin("inventory-setups", INVENTORY_SETUPS, "Save and load gear setups per activity", always),
-				new HubPlugin("dude-wheres-my-stuff", DUDE, "Tracks items in banks, death piles and storage", always),
 				new HubPlugin("shortest-path", SHORTEST_PATH, "Draws a route to any spot on the world map", always),
-				new HubPlugin("tictac7x-charges", ITEM_CHARGES, "Shows charges on many more items", never),
-				new HubPlugin("ge-filters", GE_FILTERS, "Better searching in the Grand Exchange", never)
+				new HubPlugin("tictac7x-charges", ITEM_CHARGES, "Shows charges on many more items", always)
 			)),
 			new HubCategory("Tiles & markers", Arrays.asList(
-				new HubPlugin("tile-packs", TILE_PACKS, "Ready-made collections of ground marker tiles", always),
-				new HubPlugin("radius-markers", RADIUS_MARKERS, "Mark NPC attack, aggression and wander ranges", always),
-				new HubPlugin("ground-marker-profiles", GROUND_MARKER_PROFILES, "Switch between sets of ground markers", never),
-				new HubPlugin("improved-tile-indicators", IMPROVED_TILES, "More options than the built-in Tile Indicators", never),
-				new HubPlugin("quick-tiles", QUICK_TILES, "Mark tiles with a hotkey or Shift + right-click", never),
-				new HubPlugin("path-marker", PATH_MARKER, "Shows the path your character is about to walk", never),
-				new HubPlugin("line-of-sight", LINE_OF_SIGHT, "Shows your character's line of sight", never)
-			)),
-			new HubCategory("Keybinds", Arrays.asList(
-				new HubPlugin("key-remapping-plus", KEY_REMAPPING_PLUS, "Key Remapping with extra features", never),
-				new HubPlugin("smart-key-remapping", SMART_KEY_REMAPPING, "Key remapping that gets out of the way while typing", never),
-				new HubPlugin("plugin-hotkeys", PLUGIN_HOTKEYS, "Bind a hotkey to switch any plugin on or off", never),
-				new HubPlugin("keybinds-overlay", KEYBINDS_OVERLAY, "Shows your keybinds on screen while you learn them", never)
+				new HubPlugin("tile-packs", TILE_PACKS, "Ready-made tile setups, including raids and bosses", always),
+				new HubPlugin("radius-markers", RADIUS_MARKERS, "NPC attack and wander ranges, with boss markers", always)
 			)),
 			new HubCategory("Graphics", Arrays.asList(
 				new HubPlugin("117hd", HD, "Big graphics upgrade; replaces the GPU plugin and needs a strong graphics card", strongPc)

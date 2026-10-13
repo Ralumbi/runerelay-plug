@@ -7,9 +7,11 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.regex.Pattern;
 import javax.inject.Inject;
 import javax.inject.Singleton;
 import lombok.Getter;
@@ -81,8 +83,11 @@ class SettingsModel
 		List<Setting> settings;
 	}
 
+	private static final Pattern REMAP_KEY = Pattern.compile("f([1-9]|1[0-2])|esc");
+
 	private final ConfigManager configManager;
 	private final PluginManager pluginManager;
+	private final GameKeybinds gameKeybinds;
 
 	/**
 	 * Plugins whose page lists every editable setting, not just the curated ones.
@@ -114,10 +119,11 @@ class SettingsModel
 	private final Map<String, Setting> resolvedById = new LinkedHashMap<>();
 
 	@Inject
-	SettingsModel(ConfigManager configManager, PluginManager pluginManager)
+	SettingsModel(ConfigManager configManager, PluginManager pluginManager, GameKeybinds gameKeybinds)
 	{
 		this.configManager = configManager;
 		this.pluginManager = pluginManager;
+		this.gameKeybinds = gameKeybinds;
 	}
 
 	List<ResolvedSection> resolve(PerformanceTier tier, SystemSpecs specs)
@@ -268,7 +274,7 @@ class SettingsModel
 			{
 				Object value = byName(item.getType(), recommended);
 				return new Setting(def, plugin, descriptor.getGroup().value(), item,
-					label(descriptor, item), item.getType(),
+					label(def, descriptor, item), item.getType(),
 					isCompatible(item.getType(), value) ? value : null);
 			}
 		}
@@ -286,9 +292,17 @@ class SettingsModel
 
 	/**
 	 * Prefix the item's name with its config section, since names like "Highlight color" repeat.
+	 * Key remapping's F-key rows say which tab the key opens in the game instead.
 	 */
-	private static String label(ConfigDescriptor descriptor, ConfigItemDescriptor item)
+	private String label(Catalog.SettingDef def, ConfigDescriptor descriptor, ConfigItemDescriptor item)
 	{
+		if (Catalog.isKeyRemapper(def.getPlugin()) && REMAP_KEY.matcher(def.getKey()).matches())
+		{
+			String key = def.getKey().equals("esc") ? "Esc" : def.getKey().toUpperCase(Locale.ROOT);
+			String does = gameKeybinds.describe(def.getKey());
+			return does == null ? key + " key (log in to see its tab)" : key + " key → " + does;
+		}
+
 		String sectionKey = item.getItem().section();
 		for (ConfigSectionDescriptor section : descriptor.getSections())
 		{

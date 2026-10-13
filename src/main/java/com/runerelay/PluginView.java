@@ -1,12 +1,17 @@
 package com.runerelay;
 
 import java.awt.BorderLayout;
-import java.awt.Color;
 import java.awt.FlowLayout;
+import java.awt.Toolkit;
+import java.awt.datatransfer.DataFlavor;
+import java.awt.datatransfer.UnsupportedFlavorException;
+import java.io.IOException;
 import java.util.List;
+import java.util.function.IntSupplier;
 import javax.swing.JButton;
 import javax.swing.JComponent;
 import javax.swing.JLabel;
+import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.border.EmptyBorder;
 import net.runelite.client.ui.ColorScheme;
@@ -50,7 +55,7 @@ class PluginView
 
 		JLabel title = new JLabel(Ui.html(name, titleWidth));
 		title.setFont(FontManager.getRunescapeBoldFont());
-		title.setForeground(Color.WHITE);
+		title.setForeground(ColorScheme.TEXT_COLOR);
 		bar.add(title, BorderLayout.CENTER);
 		return bar;
 	}
@@ -66,7 +71,9 @@ class PluginView
 		{
 			content.add(Ui.infoBox(info, Ui.INFO_WIDTH));
 		}
+		// Only mention rivals the player actually has
 		List<String> rivals = Catalog.rivals(name);
+		rivals.removeIf(rival -> model.findPlugin(rival) == null);
 		if (!rivals.isEmpty())
 		{
 			content.add(Ui.small(Ui.html("⚠ Can't be on together with " + String.join(" or ", rivals)
@@ -88,6 +95,15 @@ class PluginView
 			card.add(install);
 			content.add(card);
 			return;
+		}
+
+		if (name.equals(MarkerPacks.TILE_PACKS))
+		{
+			content.add(tilePacksCard());
+		}
+		else if (name.equals(MarkerPacks.RADIUS_MARKERS))
+		{
+			content.add(radiusPacksCard());
 		}
 
 		if (!model.isPluginEnabled(name))
@@ -155,6 +171,105 @@ class PluginView
 		}
 	}
 
+	private JPanel tilePacksCard()
+	{
+		long on = panel.getMarkerPacks().enabledTilePacks().stream().filter(MarkerPacks.bossTilePackIds()::contains).count();
+		JPanel card = Ui.card(ColorScheme.BRAND_ORANGE);
+		card.add(Ui.small(Ui.html("<b>Boss & raid tiles</b><br>Community tile setups for raids, bosses, the Inferno and "
+			+ "the Colosseum. " + (on == 0 ? "None switched on yet." : on + " switched on."), Ui.CARD_TEXT_WIDTH), ColorScheme.TEXT_COLOR));
+		JButton choose = new JButton(on == 0 ? "Set up boss & raid tiles" : "Change boss & raid tiles");
+		choose.setForeground(ColorScheme.BRAND_ORANGE);
+		choose.addActionListener(e -> panel.open(RuneRelayPanel.View.PACKS, null));
+		card.add(choose);
+		return card;
+	}
+
+	private JPanel radiusPacksCard()
+	{
+		MarkerPacks packs = panel.getMarkerPacks();
+		JPanel card = Ui.card(ColorScheme.BRAND_ORANGE);
+		card.add(Ui.small(Ui.html("<b>Boss & raid radius markers</b><br>Add ready-made markers measured in game: "
+			+ "a pack bundled with RuneRelay, or markers someone shared with you.", Ui.CARD_TEXT_WIDTH), ColorScheme.TEXT_COLOR));
+
+		List<MarkerPacks.RadiusPack> bundled = packs.bundledRadiusPacks();
+		if (bundled.isEmpty())
+		{
+			card.add(Ui.note("No marker packs are bundled with this version.", Ui.CARD_TEXT_WIDTH));
+		}
+		for (MarkerPacks.RadiusPack pack : bundled)
+		{
+			card.add(Ui.small(Ui.html("<b>" + Ui.escape(pack.getName()) + "</b>: " + Ui.escape(pack.getDescription())
+				+ "<br>" + Ui.colored("From " + Ui.escape(pack.getCredit()), ColorScheme.LIGHT_GRAY_COLOR), Ui.CARD_TEXT_WIDTH),
+				ColorScheme.TEXT_COLOR));
+			JButton add = new JButton("Add " + pack.getName().toLowerCase());
+			add.addActionListener(e ->
+			{
+				importRadius(() -> packs.importBundledRadiusPack(pack));
+				if (pack.isNeedsMaxRange() && !packs.isMaxRangeShown())
+				{
+					offerMaxRange(pack);
+				}
+			});
+			card.add(add);
+		}
+
+		JButton paste = new JButton("Add markers from clipboard");
+		paste.setToolTipText("Paste markers copied with Radius Markers' own copy button");
+		paste.addActionListener(e -> importRadius(() -> packs.importRadiusMarkers(readClipboard())));
+		card.add(paste);
+		card.add(Ui.note("To share yours: open Radius Markers' panel, press its copy button and send the text. "
+			+ "The other player copies it and presses the button above.", Ui.CARD_TEXT_WIDTH));
+		return card;
+	}
+
+	/**
+	 * Some packs only work with max ranges shown; offer to switch that back on.
+	 */
+	private void offerMaxRange(MarkerPacks.RadiusPack pack)
+	{
+		SettingsModel.Setting maxRange = model.byId(MarkerPacks.RADIUS_MARKERS + ".includeMaxRange");
+		if (maxRange == null)
+		{
+			return;
+		}
+		int choice = JOptionPane.showConfirmDialog(panel,
+			"The " + pack.getName().toLowerCase() + " need Radius Markers' \"Include max range\" switched on. "
+				+ "That also shows the max ranges of your other markers. Switch it on?",
+			"Include max range", JOptionPane.YES_NO_OPTION, JOptionPane.QUESTION_MESSAGE);
+		if (choice == JOptionPane.YES_OPTION)
+		{
+			panel.change(maxRange, true, panel::requestRebuild);
+		}
+	}
+
+	private void importRadius(IntSupplier importer)
+	{
+		try
+		{
+			int added = importer.getAsInt();
+			panel.status(added == 0
+				? "Those markers are already in Radius Markers."
+				: "Added " + added + (added == 1 ? " radius marker." : " radius markers."));
+			panel.requestRebuild();
+		}
+		catch (IllegalArgumentException ex)
+		{
+			JOptionPane.showMessageDialog(panel, ex.getMessage(), "Couldn't add markers", JOptionPane.WARNING_MESSAGE);
+		}
+	}
+
+	private static String readClipboard()
+	{
+		try
+		{
+			return (String) Toolkit.getDefaultToolkit().getSystemClipboard().getData(DataFlavor.stringFlavor);
+		}
+		catch (UnsupportedFlavorException | IOException | IllegalStateException ex)
+		{
+			throw new IllegalArgumentException("Copy the markers first; the clipboard doesn't hold any text.", ex);
+		}
+	}
+
 	/**
 	 * One setting: name and control on a line, then whether it matches RuneRelay's suggestion.
 	 */
@@ -178,7 +293,7 @@ class PluginView
 			top.add(editor, BorderLayout.EAST);
 			// Size the name around the control, so the control is never pushed out of view
 			JLabel label = new JLabel(Ui.html(Ui.escape(setting.getLabel()), Ui.ROW_WIDTH - 6 - editor.getPreferredSize().width));
-			label.setForeground(Color.WHITE);
+			label.setForeground(ColorScheme.TEXT_COLOR);
 			top.add(label, BorderLayout.CENTER);
 			add(top);
 

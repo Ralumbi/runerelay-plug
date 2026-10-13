@@ -1,7 +1,6 @@
 package com.runerelay;
 
 import java.awt.BorderLayout;
-import java.awt.Color;
 import java.awt.FlowLayout;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -42,7 +41,7 @@ class ReviewView
 		bar.add(back, BorderLayout.WEST);
 		JLabel title = new JLabel("Suggested changes");
 		title.setFont(FontManager.getRunescapeBoldFont());
-		title.setForeground(Color.WHITE);
+		title.setForeground(ColorScheme.TEXT_COLOR);
 		bar.add(title, BorderLayout.CENTER);
 		return bar;
 	}

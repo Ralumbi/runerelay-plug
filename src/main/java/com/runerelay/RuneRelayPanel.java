@@ -1,7 +1,6 @@
 package com.runerelay;
 
 import java.awt.BorderLayout;
-import java.awt.Component;
 import java.awt.Dimension;
 import java.awt.Rectangle;
 import java.util.ArrayList;
@@ -9,12 +8,9 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Set;
 import javax.inject.Inject;
-import javax.swing.DefaultListCellRenderer;
 import javax.swing.ImageIcon;
 import javax.swing.JButton;
-import javax.swing.JComboBox;
 import javax.swing.JLabel;
-import javax.swing.JList;
 import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.JScrollPane;
@@ -25,7 +21,6 @@ import javax.swing.border.EmptyBorder;
 import lombok.Getter;
 import net.runelite.api.Client;
 import net.runelite.client.config.ConfigManager;
-import net.runelite.client.config.RuneLiteConfig;
 import net.runelite.client.events.ConfigChanged;
 import net.runelite.client.externalplugins.ExternalPluginManager;
 import net.runelite.client.ui.ColorScheme;
@@ -34,6 +29,7 @@ import net.runelite.client.ui.FontManager;
 import net.runelite.client.ui.PluginPanel;
 import net.runelite.client.ui.components.colorpicker.ColorPickerManager;
 import net.runelite.client.util.ImageUtil;
+import net.runelite.client.util.LinkBrowser;
 
 /**
  * Shell of the side panel: a fixed header, one scrolling view (plugin list, plugin page or
@@ -42,12 +38,14 @@ import net.runelite.client.util.ImageUtil;
 class RuneRelayPanel extends PluginPanel
 {
 	private static final int SCROLL_SPEED = 16;
+	private static final String WEBSITE = "https://runerelay.com";
 
 	enum View
 	{
 		HOME,
 		PLUGIN,
-		REVIEW
+		REVIEW,
+		PACKS
 	}
 
 	private final Client client;
@@ -62,8 +60,10 @@ class RuneRelayPanel extends PluginPanel
 	private final ExternalPluginManager externalPluginManager;
 	@Getter
 	private final ColorPickerManager colorPickerManager;
+	@Getter
+	private final MarkerPacks markerPacks;
 
-	private final JPanel tierRow = new JPanel(new DynamicGridLayout(0, 1, 0, 2));
+	private final JPanel tierRow = new JPanel(new DynamicGridLayout(0, 1, 0, 5));
 	private final JPanel viewBar = new JPanel(new BorderLayout());
 	private final JPanel content = new JPanel(new DynamicGridLayout(0, 1, 0, 5));
 	private final JScrollPane scrollPane;
@@ -73,6 +73,7 @@ class RuneRelayPanel extends PluginPanel
 	private final HomeView home;
 	private final PluginView pluginView;
 	private final ReviewView reviewView;
+	private final PacksView packsView;
 
 	private View view = View.HOME;
 	private String openPlugin;
@@ -84,11 +85,17 @@ class RuneRelayPanel extends PluginPanel
 	private SystemSpecs specs;
 
 	private volatile boolean rebuildPending;
+	/**
+	 * Whether the panel is open; while closed, rebuilds wait until it is opened.
+	 */
+	private volatile boolean active;
+	private volatile boolean stale = true;
 	private volatile Set<String> watchedGroups = Collections.emptySet();
 
 	@Inject
 	RuneRelayPanel(Client client, ConfigManager configManager, RuneRelayConfig config, SettingsModel model,
-		SettingsApplier applier, ExternalPluginManager externalPluginManager, ColorPickerManager colorPickerManager)
+		SettingsApplier applier, ExternalPluginManager externalPluginManager, ColorPickerManager colorPickerManager,
+		MarkerPacks markerPacks)
 	{
 		super(false);
 		this.client = client;
@@ -98,9 +105,11 @@ class RuneRelayPanel extends PluginPanel
 		this.applier = applier;
 		this.externalPluginManager = externalPluginManager;
 		this.colorPickerManager = colorPickerManager;
+		this.markerPacks = markerPacks;
 		this.home = new HomeView(this);
 		this.pluginView = new PluginView(this);
 		this.reviewView = new ReviewView(this);
+		this.packsView = new PacksView(this);
 
 		setLayout(new BorderLayout());
 		setBackground(ColorScheme.DARK_GRAY_COLOR);
@@ -110,7 +119,8 @@ class RuneRelayPanel extends PluginPanel
 		north.setBackground(ColorScheme.DARK_GRAY_COLOR);
 		north.setBorder(new EmptyBorder(8, 8, 6, 8));
 		north.add(header());
-		tierRow.setOpaque(false);
+		tierRow.setBackground(ColorScheme.DARKER_GRAY_COLOR);
+		tierRow.setBorder(new EmptyBorder(7, 8, 7, 8));
 		north.add(tierRow);
 		viewBar.setOpaque(false);
 		north.add(viewBar);
@@ -195,30 +205,62 @@ class RuneRelayPanel extends PluginPanel
 		header.setOpaque(false);
 		header.add(new JLabel(new ImageIcon(ImageUtil.loadImageResource(RuneRelayPanel.class, "logo_32.png"))), BorderLayout.WEST);
 
-		JPanel text = new JPanel(new DynamicGridLayout(0, 1));
+		JPanel text = new JPanel(new DynamicGridLayout(0, 1, 0, 1));
 		text.setOpaque(false);
+		text.setBorder(new EmptyBorder(1, 0, 0, 0));
 		JLabel name = new JLabel("RuneRelay");
 		name.setFont(FontManager.getRunescapeBoldFont());
 		name.setForeground(ColorScheme.BRAND_ORANGE);
 		text.add(name);
-		text.add(Ui.small("Best settings for this computer", ColorScheme.LIGHT_GRAY_COLOR));
+		text.add(Ui.small("RuneLite, set up right", ColorScheme.LIGHT_GRAY_COLOR));
 		header.add(text, BorderLayout.CENTER);
 
-		JLabel help = Ui.link("? Guide", "Show how RuneRelay works", () ->
+		JPanel buttons = new JPanel(new DynamicGridLayout(0, 1, 0, 3));
+		buttons.setOpaque(false);
+		buttons.add(Ui.pillButton("Website", "Open " + WEBSITE + " in your browser", () -> LinkBrowser.browse(WEBSITE)));
+		buttons.add(Ui.pillButton("Guide", "Show how RuneRelay works", () ->
 		{
 			configManager.setConfiguration(RuneRelayConfig.GROUP, RuneRelayConfig.GUIDE_DISMISSED, false);
 			open(View.HOME, null);
-		});
-		help.setVerticalAlignment(JLabel.TOP);
-		header.add(help, BorderLayout.EAST);
+		}));
+		header.add(buttons, BorderLayout.EAST);
 		return header;
 	}
 
 	// region rebuilding
 
+	/**
+	 * Plugin on/off changes arrive as PluginChanged, so RuneLite's own (busy) config group isn't watched.
+	 */
 	boolean isWatched(String group)
 	{
-		return RuneRelayConfig.GROUP.equals(group) || RuneLiteConfig.GROUP_NAME.equals(group) || watchedGroups.contains(group);
+		return RuneRelayConfig.GROUP.equals(group) || watchedGroups.contains(group);
+	}
+
+	@Override
+	public void onActivate()
+	{
+		active = true;
+		if (stale)
+		{
+			requestRebuild();
+		}
+	}
+
+	@Override
+	public void onDeactivate()
+	{
+		active = false;
+	}
+
+	/**
+	 * Settings now belong to another profile: start over, and drop undo steps for the old one.
+	 */
+	void onProfileChanged()
+	{
+		applier.clearHistory();
+		lastStatus = null;
+		SwingUtilities.invokeLater(() -> open(View.HOME, null));
 	}
 
 	void onConfigChanged(ConfigChanged event)
@@ -235,6 +277,11 @@ class RuneRelayPanel extends PluginPanel
 	 */
 	void requestRebuild()
 	{
+		if (!active)
+		{
+			stale = true;
+			return;
+		}
 		if (rebuildPending)
 		{
 			return;
@@ -257,11 +304,25 @@ class RuneRelayPanel extends PluginPanel
 
 	private void rebuild()
 	{
+		stale = false;
 		specs = SystemSpecs.detect(client.getCanvas());
 		PerformanceTier detected = PerformanceTier.detect(specs);
 		tier = config.tier() == PerformanceTier.AUTO ? detected : config.tier();
 
 		model.resolve(tier, specs);
+		if (model.getPendingSetup().contains(MarkerPacks.RADIUS_MARKERS) && model.findPlugin(MarkerPacks.RADIUS_MARKERS) != null)
+		{
+			// Radius Markers starts empty; give it the bundled boss markers it was installed for
+			try
+			{
+				int added = markerPacks.installDefaultRadiusPacks();
+				lastStatus = "Radius Markers installed with " + added + " boss markers from the OSRS Wiki.";
+			}
+			catch (IllegalArgumentException ex)
+			{
+				lastStatus = "Radius Markers installed, but its boss markers couldn't be added: " + ex.getMessage();
+			}
+		}
 		List<SettingsApplier.Change> setup = model.takeSetupChanges();
 		if (!setup.isEmpty())
 		{
@@ -292,6 +353,10 @@ class RuneRelayPanel extends PluginPanel
 				viewBar.add(reviewView.bar(), BorderLayout.CENTER);
 				reviewView.build(content);
 				break;
+			case PACKS:
+				viewBar.add(packsView.bar(), BorderLayout.CENTER);
+				packsView.build(content);
+				break;
 			default:
 				viewBar.add(home.bar(), BorderLayout.CENTER);
 				home.build(content);
@@ -311,41 +376,39 @@ class RuneRelayPanel extends PluginPanel
 	private void rebuildTierRow(PerformanceTier detected)
 	{
 		tierRow.removeAll();
-		JPanel row = new JPanel(new BorderLayout(6, 0));
-		row.setOpaque(false);
-		JLabel label = Ui.small("Your PC", ColorScheme.TEXT_COLOR);
-		label.setToolTipText("Pick a lower tier if the game feels slow; graphics cards can't be detected");
-		row.add(label, BorderLayout.WEST);
-		row.add(tierSelector(detected), BorderLayout.CENTER);
-		tierRow.add(row);
-		tierRow.add(Ui.note(describe(specs), Ui.CONTENT_WIDTH));
-	}
 
-	private JComboBox<PerformanceTier> tierSelector(PerformanceTier detected)
-	{
-		JComboBox<PerformanceTier> combo = new JComboBox<>(PerformanceTier.values());
-		combo.setSelectedItem(config.tier());
-		combo.setToolTipText("Which settings RuneRelay suggests depends on how strong your computer is");
-		combo.setRenderer(new DefaultListCellRenderer()
+		JPanel top = new JPanel(new BorderLayout());
+		top.setOpaque(false);
+		JLabel label = Ui.small("YOUR PC", ColorScheme.LIGHT_GRAY_COLOR);
+		label.setToolTipText("Which settings RuneRelay suggests depends on how strong your computer is");
+		top.add(label, BorderLayout.WEST);
+		String chosen = config.tier() == PerformanceTier.AUTO ? "Auto picked " + detected.getDisplayName() : "Set by you";
+		top.add(Ui.small(chosen, ColorScheme.TEXT_COLOR), BorderLayout.EAST);
+		tierRow.add(top);
+
+		PerformanceTier[] tiers = PerformanceTier.values();
+		String[] labels = new String[tiers.length];
+		String[] tooltips = new String[tiers.length];
+		for (int i = 0; i < tiers.length; i++)
 		{
-			@Override
-			public Component getListCellRendererComponent(JList<?> list, Object value, int index, boolean isSelected, boolean cellHasFocus)
-			{
-				String label = value == PerformanceTier.AUTO
-					? "Auto: " + detected.getDisplayName()
-					: value + " computer";
-				return super.getListCellRendererComponent(list, label, index, isSelected, cellHasFocus);
-			}
-		});
-		combo.addActionListener(e ->
-			configManager.setConfiguration(RuneRelayConfig.GROUP, "tier", (PerformanceTier) combo.getSelectedItem()));
-		return combo;
+			labels[i] = tiers[i] == PerformanceTier.AUTO ? "Auto" : tiers[i].getDisplayName();
+			tooltips[i] = tiers[i] == PerformanceTier.AUTO
+				? "Let RuneRelay pick: " + detected.getDisplayName() + " for this computer"
+				: "Suggest settings for a " + tiers[i].getDisplayName().toLowerCase() + " computer. "
+					+ "Graphics cards can't be detected, so pick a lower tier if the game feels slow.";
+		}
+		tierRow.add(Ui.tabs(labels, tooltips, config.tier().ordinal(), index ->
+			configManager.setConfiguration(RuneRelayConfig.GROUP, "tier", tiers[index]), ColorScheme.DARK_GRAY_COLOR));
+
+		JLabel specsLine = Ui.note(describe(specs), Ui.CONTENT_WIDTH - 16);
+		specsLine.setToolTipText(specs.getOs());
+		tierRow.add(specsLine);
 	}
 
 	private static String describe(SystemSpecs specs)
 	{
 		StringBuilder sb = new StringBuilder();
-		sb.append(specs.getOs()).append(" · ").append(specs.getCpuThreads()).append(" threads");
+		sb.append(specs.getCpuThreads()).append(" threads");
 		if (specs.getTotalRamMb() > 0)
 		{
 			sb.append(" · ").append(Math.round(specs.getTotalRamMb() / 1024.0)).append(" GB");
@@ -355,7 +418,7 @@ class RuneRelayPanel extends PluginPanel
 			sb.append(" · ").append(specs.getScreenWidth()).append('×').append(specs.getScreenHeight());
 			if (specs.isRefreshRateKnown())
 			{
-				sb.append(" @ ").append(specs.getRefreshRate()).append(" Hz");
+				sb.append(" · ").append(specs.getRefreshRate()).append(" Hz");
 			}
 		}
 		return sb.toString();

@@ -26,6 +26,7 @@ import net.runelite.client.config.Range;
 import net.runelite.client.config.Units;
 import net.runelite.client.ui.ColorScheme;
 import net.runelite.client.ui.FontManager;
+import net.runelite.client.ui.components.TitleCaseListCellRenderer;
 import net.runelite.client.ui.components.colorpicker.ColorPickerManager;
 import net.runelite.client.ui.components.colorpicker.RuneliteColorPicker;
 
@@ -120,7 +121,9 @@ final class ValueEditors
 	private static JComponent enumCombo(Class<?> cls, Object value, Consumer<Object> onChange)
 	{
 		JComboBox<Object> combo = new JComboBox<>(cls.getEnumConstants());
+		combo.setRenderer(new TitleCaseListCellRenderer());
 		combo.setSelectedItem(value);
+		Ui.styleCombo(combo);
 		combo.setPreferredSize(COMBO_SIZE);
 		combo.addActionListener(e -> onChange.accept(combo.getSelectedItem()));
 		return combo;
