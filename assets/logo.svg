@@ -1,0 +1,42 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#343a43"/>
+      <stop offset="1" stop-color="#16181c"/>
+    </linearGradient>
+    <radialGradient id="stone" cx="0.38" cy="0.32" r="0.75">
+      <stop offset="0" stop-color="#ffd27a"/>
+      <stop offset="0.45" stop-color="#f2a01e"/>
+      <stop offset="1" stop-color="#b85e00"/>
+    </radialGradient>
+    <linearGradient id="arc" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#ffc35c"/>
+      <stop offset="1" stop-color="#dc8a00"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Tile -->
+  <rect x="4" y="4" width="120" height="120" rx="28" fill="url(#bg)"/>
+  <rect x="4.75" y="4.75" width="118.5" height="118.5" rx="27.25" fill="none" stroke="#ffffff" stroke-opacity="0.08" stroke-width="1.5"/>
+
+  <!-- Relay arrows -->
+  <g fill="none" stroke="url(#arc)" stroke-width="7" stroke-linecap="round">
+    <path d="M24.16 41 A46 46 0 0 1 99.24 34.43"/>
+    <path d="M103.84 87 A46 46 0 0 1 28.76 93.57"/>
+  </g>
+  <g fill="#ffb84d">
+    <polygon points="106.0,42.1 105.0,29.6 93.5,39.2"/>
+    <polygon points="22.0,85.9 23.0,98.4 34.5,88.8"/>
+  </g>
+
+  <!-- Runestone -->
+  <circle cx="64" cy="64" r="30" fill="url(#stone)" stroke="#7a3f00" stroke-width="2.5"/>
+  <ellipse cx="54" cy="50" rx="11" ry="6" fill="#ffffff" fill-opacity="0.28" transform="rotate(-30 54 50)"/>
+
+  <!-- Runic R -->
+  <g fill="none" stroke="#2b1703" stroke-width="6.5" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M55 47 L55 81"/>
+    <path d="M55 47 L67 47 L74 54.5 L67 62 L55 62"/>
+    <path d="M64 62 L75 81"/>
+  </g>
+</svg>
