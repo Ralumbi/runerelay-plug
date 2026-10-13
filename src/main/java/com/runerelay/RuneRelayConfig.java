@@ -4,16 +4,18 @@ import net.runelite.client.config.Config;
 import net.runelite.client.config.ConfigGroup;
 import net.runelite.client.config.ConfigItem;
 
-@ConfigGroup("runerelay")
+@ConfigGroup(RuneRelayConfig.GROUP)
 public interface RuneRelayConfig extends Config
 {
+	String GROUP = "runerelay";
+
 	@ConfigItem(
-		keyName = "greeting",
-		name = "Welcome Greeting",
-		description = "The message to show to the user when they login"
+		keyName = "tier",
+		name = "Performance tier",
+		description = "Which hardware tier to recommend settings for. Auto-detect guesses from your CPU and memory."
 	)
-	default String greeting()
+	default PerformanceTier tier()
 	{
-		return "Hello";
+		return PerformanceTier.AUTO;
 	}
 }
