@@ -8,6 +8,7 @@ import net.runelite.client.config.ConfigItem;
 public interface RuneRelayConfig extends Config
 {
 	String GROUP = "runerelay";
+	String GUIDE_DISMISSED = "guideDismissed";
 
 	@ConfigItem(
 		keyName = "tier",
@@ -17,5 +18,16 @@ public interface RuneRelayConfig extends Config
 	default PerformanceTier tier()
 	{
 		return PerformanceTier.AUTO;
+	}
+
+	@ConfigItem(
+		keyName = GUIDE_DISMISSED,
+		name = "Hide getting started",
+		description = "Hide the getting started guide at the top of the panel.",
+		hidden = true
+	)
+	default boolean guideDismissed()
+	{
+		return false;
 	}
 }

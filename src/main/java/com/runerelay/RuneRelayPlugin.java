@@ -3,10 +3,16 @@ package com.runerelay;
 import com.google.inject.Provides;
 import javax.inject.Inject;
 import lombok.extern.slf4j.Slf4j;
-import net.runelite.api.Client;
 import net.runelite.client.config.ConfigManager;
+import net.runelite.client.eventbus.Subscribe;
+import net.runelite.client.events.ConfigChanged;
+import net.runelite.client.events.ExternalPluginsChanged;
+import net.runelite.client.events.PluginChanged;
 import net.runelite.client.plugins.Plugin;
 import net.runelite.client.plugins.PluginDescriptor;
+import net.runelite.client.ui.ClientToolbar;
+import net.runelite.client.ui.NavigationButton;
+import net.runelite.client.util.ImageUtil;
 
 @Slf4j
 @PluginDescriptor(
@@ -17,19 +23,49 @@ import net.runelite.client.plugins.PluginDescriptor;
 public class RuneRelayPlugin extends Plugin
 {
 	@Inject
-	private Client client;
+	private ClientToolbar clientToolbar;
+
+	@Inject
+	private RuneRelayPanel panel;
+
+	private NavigationButton navButton;
 
 	@Override
 	protected void startUp() throws Exception
 	{
-		SystemSpecs specs = SystemSpecs.detect(client.getCanvas());
-		log.debug("RuneRelay started on {} ({} tier)", specs, PerformanceTier.detect(specs));
+		navButton = NavigationButton.builder()
+			.tooltip("RuneRelay")
+			.icon(ImageUtil.loadImageResource(getClass(), "nav_icon.png"))
+			.priority(10)
+			.panel(panel)
+			.build();
+		clientToolbar.addNavigation(navButton);
+		panel.requestRebuild();
 	}
 
 	@Override
 	protected void shutDown() throws Exception
 	{
-		log.debug("RuneRelay stopped!");
+		clientToolbar.removeNavigation(navButton);
+		navButton = null;
+	}
+
+	@Subscribe
+	public void onConfigChanged(ConfigChanged event)
+	{
+		panel.onConfigChanged(event);
+	}
+
+	@Subscribe
+	public void onPluginChanged(PluginChanged event)
+	{
+		panel.requestRebuild();
+	}
+
+	@Subscribe
+	public void onExternalPluginsChanged(ExternalPluginsChanged event)
+	{
+		panel.requestRebuild();
 	}
 
 	@Provides
