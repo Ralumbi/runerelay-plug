@@ -1,0 +1,26 @@
+[
+ {
+  "name": "Raid & boss markers",
+  "file": "raid-boss-markers.json",
+  "installWithPlugin": true,
+  "credit": "U PR (RuneRelay)",
+  "description": "Theatre of Blood Nylocas and Verzik (normal and hard mode), Tombs of Amascut Akkha and Apmeken baboons, Phantom Muspah and Nex.",
+  "needsMaxRange": false
+ },
+ {
+  "name": "Boss markers",
+  "file": "boss-markers.json",
+  "installWithPlugin": true,
+  "credit": "OSRS Wiki: Doom of Mokhaiotl/Strategies, The Leviathan/Strategies, User:Daddy Bilbo/Reference",
+  "description": "Doom of Mokhaiotl halberd range (turns green in the shield phase) and burrowed phase, Vardorvis, and the Leviathan's Abyssal pathfinder buff radius.",
+  "needsMaxRange": false
+ },
+ {
+  "name": "Clue step markers",
+  "file": "clue-markers.json",
+  "installWithPlugin": false,
+  "credit": "OSRS Wiki: User:Dodokipje",
+  "description": "164 markers for master clue hot-and-cold and coordinate steps, Sherlock, and clue NPC wander ranges. Needs Radius Markers’ \"Include max range\" on.",
+  "needsMaxRange": true
+ }
+]
